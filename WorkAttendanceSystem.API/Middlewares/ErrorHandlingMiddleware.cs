@@ -8,63 +8,52 @@ namespace WorkAttendanceSystem.API.Middlewares
     {
         private readonly RequestDelegate _next;
 
-        public ErrorHandlingMiddleware(RequestDelegate next)
-        {
-            _next = next;
-        }
+        public ErrorHandlingMiddleware(RequestDelegate next) => _next = next;
 
         public async Task InvokeAsync(HttpContext context)
         {
             try
             {
-                if (!context.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                    context.Features.Get<Microsoft.AspNetCore.Mvc.Infrastructure.IActionContextAccessor>()?.ActionContext?.ModelState.IsValid == false)
+                await _next(context);
+
+                if (context.Response.StatusCode == (int)HttpStatusCode.BadRequest &&
+                    context.Items.ContainsKey("ModelStateErrors") &&
+                    context.Items["ModelStateErrors"] is Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary modelState)
                 {
-                    var errors = context.Features.Get<Microsoft.AspNetCore.Mvc.Infrastructure.IActionContextAccessor>()!
-                        .ActionContext.ModelState
+                    var errors = modelState
                         .Where(x => x.Value.Errors.Count > 0)
                         .ToDictionary(
                             kvp => kvp.Key,
                             kvp => kvp.Value.Errors.Select(e => e.ErrorMessage).ToArray()
                         );
 
-                    context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    context.Response.ContentType = "application/json";
-
-                    await context.Response.WriteAsJsonAsync(new
-                    {
-                        code = "VALIDATION_ERROR",
-                        message = "Validation failed",
-                        details = errors
-                    });
-
-                    return;
+                    await WriteErrorResponseAsync(context, "VALIDATION_ERROR", "Validation failed", errors);
                 }
-
-                await _next(context);
             }
             catch (DomainException dex)
             {
-                await HandleExceptionAsync(context, dex.Code, dex.Message, HttpStatusCode.BadRequest);
+                await WriteErrorResponseAsync(context, dex.Code, dex.Message, null, HttpStatusCode.BadRequest);
             }
             catch (Exception ex)
             {
-                await HandleExceptionAsync(context, "INTERNAL_ERROR", ex.Message, HttpStatusCode.InternalServerError);
+                await WriteErrorResponseAsync(context, "INTERNAL_ERROR", ex.Message, null, HttpStatusCode.InternalServerError);
             }
         }
 
-        private static Task HandleExceptionAsync(HttpContext context, string code, string message, HttpStatusCode statusCode)
+        private static Task WriteErrorResponseAsync(HttpContext context, string code, string message, object? details = null, HttpStatusCode statusCode = HttpStatusCode.BadRequest)
         {
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = (int)statusCode;
 
-            var result = JsonSerializer.Serialize(new
+            var payload = new
             {
                 code,
-                message
-            });
+                message,
+                details
+            };
 
-            return context.Response.WriteAsync(result);
+            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+            return context.Response.WriteAsync(json);
         }
     }
 }

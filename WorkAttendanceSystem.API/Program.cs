@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using WorkAttendanceSystem.API.Filters;
 using WorkAttendanceSystem.API.Middlewares;
 using WorkAttendanceSystem.Application.Employees.Commands;
 using WorkAttendanceSystem.Infrastructure.Persistence;
@@ -13,7 +15,11 @@ namespace WorkAttendanceSystem.API
 
             // Add services to the container.
 
-            builder.Services.AddControllers();
+            builder.Services.AddControllers(options =>
+            {
+                options.Filters.Add<ValidationFilter>();
+            });
+
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
