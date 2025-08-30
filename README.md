@@ -104,7 +104,7 @@ GET /api/hr/positions
 ]
 ```
 
-2. Контроллер: KPPController (проходная)
+# 2. Контроллер: KPPController (проходная)
 2.1 Начало смены (вход)
 POST /api/kpp/start
 Тело запроса:
